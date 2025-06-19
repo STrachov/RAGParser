@@ -1,0 +1,7 @@
+$Env:AWS_ACCESS_KEY_ID     = "1111"
+$Env:AWS_SECRET_ACCESS_KEY = "1111"
+$Env:AWS_DEFAULT_REGION    = "eeur"
+
+aws s3 rm "s3://ragparser-documents/tables" `
+  --recursive `
+  --endpoint-url "https://38e42d66aea00f4e35692f08923b2e6b.r2.cloudflarestorage.com"

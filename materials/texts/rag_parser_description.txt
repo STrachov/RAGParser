@@ -1,0 +1,120 @@
+## Project Structure Overview
+
+### 1. Core Components
+
+#### API Layer (`src/app/`)
+- FastAPI application handling HTTP requests
+- Main endpoints:
+  - `/upload` - PDF submission
+  - `/status/{task_id}` - Processing status
+  - `/health` - Health checks
+- Async request handling
+- Integration with task queue
+
+#### Worker Layer (`src/worker/`)
+- Celery workers for PDF processing
+- Two queue types:
+  - GPU queue for ML model processing
+  - CPU queue for lighter tasks
+- Task definitions and processing logic
+
+#### PDF Parser (`src/pdf_parser/`)
+- Core parsing functionality
+- Multiple parser backends:
+  - Docling (layout-sensitive documents)
+  - Marker (scientific papers)
+  - Unstructured (OCR and image-heavy documents)
+- Intelligent chunking system
+
+### 2. Infrastructure Components
+
+#### Message Queue (`docker-compose.yml`)
+- RabbitMQ for task queue management
+- Redis for result backend and caching
+- Both services containerized for easy deployment
+
+#### Monitoring (`src\monitoring\system_monitor.py`)
+- Prometheus metrics integration
+- Health checks
+- Performance monitoring
+- Celery Flower dashboard for task monitoring
+
+### 3. Development Tools
+
+#### Scripts (`src/scripts/`)
+- Development environment setup
+- Service management
+- Testing utilities
+
+#### Testing (`src/tests/`)
+- Unit tests
+- Integration tests
+- Test utilities
+
+### 4. Deployment
+
+#### Kubernetes (`src/k8s/`)
+- Deployment configurations
+- Service definitions
+- Autoscaling rules
+- GPU support configuration
+
+#### Docker
+- Container definitions
+- Build scripts
+- Development environment
+
+## Component Interactions
+
+1. **Request Flow**:
+   ```
+   Client (RAGPilot) → FastAPI → RabbitMQ → Celery Worker → Storage → Client (RAGPilot)
+   ```
+
+2. **Processing Pipeline**:
+   ```
+   PDF Upload → Queue → Worker Selection → Parser Selection → Processing → Storage
+   ```
+
+3. **Monitoring Flow**:
+   ```
+   Services → Prometheus → Metrics → Monitoring Dashboard
+   ```
+
+## Key Features
+
+1. **Scalability**:
+   - Separate API and worker services
+   - GPU/CPU queue separation
+   - Kubernetes autoscaling support
+
+2. **Flexibility**:
+   - Multiple parser backends
+   - Configurable processing options
+   - Environment-based configuration
+
+3. **Monitoring**:
+   - Prometheus metrics (task for the future)
+   - Celery Flower dashboard
+   - Health checks
+
+4. **Development**:
+   - Poetry for dependency management
+   - Docker for containerization
+   - Comprehensive testing setup
+
+## Development Environment
+
+The project uses:
+- Poetry for dependency management
+- Docker Compose for local services
+- FastAPI for the API layer
+- Celery for task processing
+- Redis and RabbitMQ for message queuing
+- Prometheus for monitoring (task for the future)
+
+This architecture allows for:
+- Easy local development
+- Scalable production deployment
+- Efficient PDF processing with GPU acceleration
+- Comprehensive monitoring and management

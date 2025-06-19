@@ -1,0 +1,107 @@
+[tool.poetry]
+name = "pdf-parser"
+version = "0.1.0"
+description = "Microservice for parsing PDFs into structured data using ML models"
+authors = ["Your Organization <info@yourorg.com>"]
+readme = "README.md"
+packages = [{include = "pdf_parser"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+fastapi = "^0.110.0"
+uvicorn = {extras = ["standard"], version = "^0.29.0"}
+pydantic = {extras = ["dotenv"], version = "^2.6.0"}
+pydantic-settings = "^2.1.0"
+celery = {extras = ["redis", "msgpack"], version = "^5.3.6"}
+redis = {extras = ["hiredis"], version = "^5.0.0"}
+boto3 = "^1.34.61"
+minio = "^7.2.3"  # Alternative to boto3 for MinIO
+msgpack = "^1.0.7"
+# ML packages - commented out until available
+# docling = {version = "^0.8.0", optional = true}
+# Marker package not available in PyPI
+# unstructured = {extras = ["pdf", "ocr"], version = "^0.12.4", optional = true}
+pandas = "^2.0.0"  # Required by UnstructuredParser
+langchain = "^0.1.14"  # For text splitting
+tiktoken = "^0.6.0"  # For token counting
+tabulate = "^0.9.0"  # For table formatting
+loguru = "^0.7.2"  # For structured logging
+torch = {version = "^2.2.0", optional = true}
+rich = "^13.7.0"  # For CLI progress display
+tenacity = "^8.2.3"  # For retry logic
+httpx = "^0.27.0"  # For async HTTP client
+prometheus-client = "^0.19.0"  # For metrics
+structlog = "^23.2.0"  # For structured logging
+flower = "^2.0.1"  # Celery monitoring
+docling = "^2.33.0"
+unstructured = "^0.17.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-asyncio = "^0.23.5"
+pytest-cov = "^4.1.0"
+pytest-mock = "^3.12.0"
+black = "^24.1.0"
+ruff = "^0.2.0"
+mypy = "^1.8.0"
+moto = "^4.2.10"  # For mocking S3
+fakeredis = "^2.20.0"  # For mocking Redis
+reportlab = "^4.1.0"  # For generating test PDFs
+types-requests = "^2.31.0"  # Type stubs for requests
+types-redis = "^4.6.0"  # Type stubs for redis
+
+[tool.poetry.extras]
+gpu = ["torch"]
+# parsers = ["docling", "unstructured"]
+
+[tool.poetry.scripts]
+dev = "scripts.run:start_api"
+worker = "scripts.run:start_worker"
+split = "pdf_parser.utils.splitter:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+select = ["E", "F", "I", "N", "W", "B", "COM", "C4", "UP", "PT", "RET", "SIM"]
+ignore = ["E501"]  # Line length is managed by formatter
+exclude = [".git", ".venv", "__pycache__", "dist"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["pdf_parser", "app", "worker"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "docling.*,marker.*,unstructured.*,moto.*,redis.*,boto3.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks integration tests"
+] 

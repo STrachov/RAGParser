@@ -1,0 +1,116 @@
+You are an experienced platform engineer working inside the RAGPilot code-base.
+ 
+Build a **stand-alone “pdf-parser” micro-service** that turns uploaded PDFs into structured JSON/Markdown using GPU-accelerated ML models (Docling, Marker, Unstructured OCR).  
+The service will be deployed on Kubernetes and consumed by the main RAGPilot API over HTTP.
+
+⬢  Reference material — read before coding  
+1. Habr article (RU): https://habr.com/ru/articles/893356/  
+2. Author’s code, especially the **text splitter heuristics**:  
+   https://github.com/IlyaRice/RAG-Challenge-2/blob/3ed9a2a7453420ed96cfc48939ea42d47a5f7b1c/src/text_splitter.py  (some files from the repo are attched to ypur context)
+
+Mine both sources for:  
+* batching strategy that minimises GPU RAM spikes;  
+* fallback OCR workflow for scanned pages;  
+* caching policy that hashes PDF bytes → avoids double-work;
+* other insights.
+
+⬢  Deliverables  
+1. `services/pdf-parser/` repo folder containing:  
+   • **FastAPI** application (`app/main.py`) exposing  
+     – `POST /upload` → accepts URL of an S3 object & optional parser hint  
+     – `GET  /status/{task_id}` → returns one of:
+          • `{"state":"pending"| "running", "progress":0-100}`  (HTTP 200)
+          • `{"state":"succeeded", "result_key":"s3://…", "table_keys":[…]}` (200)
+          • `{"state":"failed", "error":"OutOfMemory"}` (200)
+          • HTTP 404 if task ID unknown or expired (TTL = 48 h)
+   • **Celery** worker (`worker/tasks.py`) with **gpu** & **cpu** queues; task picks parser backend, streams PDF locally, processes on GPU, uploads result to S3/MinIO, sets result in Redis.    • **Structured output spec** –  
+    – Body text as Markdown/JSONL  
+    – **Tables** serialised to both Markdown *and* machine-readable CSV/JSON (`tables/` prefix).  
+
+   • **pyproject.toml** for Poetry.  
+   • **Dockerfile** – cuda-base image, non-root user, health-check.  
+   • **k8s/** manifests:  
+     – `deployment-parser.yaml` (nodeSelector `gpu=true`, resource limits, `nvidia.com/gpu`)  
+     – `deployment-api.yaml` (CPU only)  
+     – `configmap-env.yaml`, `secret.yaml` (S3 creds, broker creds)  
+     – `keda-scaler.yaml` (scale Celery deployment on RabbitMQ queue length).  
+   • **scripts/** – build & push docker, local dev (`make dev`, `make worker`).  
+   • **.github/workflows/ci.yml** – lint (ruff), test (pytest), build.  
+
+
+2. **Security hardening** baked in:  
+   • Ingress IP allow-list in Nginx sample, mTLS placeholder.  
+   • Presigned-URL pattern: clients upload raw PDF to S3; `/upload` only receives the URL.  
+   • **Delete the local temporary file** in the worker container (success *or* failure). The original S3 object remains untouched; apply lifecycle rules only if your data-retention policy demands it.  
+   • Container runs as non-root; add seccomp & AppArmor profiles.
+
+3. **Observability**:  
+   • Prometheus metrics via FastAPI middleware & `celery.signals` (`parse_latency_seconds`, `error_total`, `gpu_memory_bytes`).  
+   • Structured logs (loguru / structlog) JSON-encoded.
+
+4. **Tests**:  
+   • Unit test per parser backend with tiny sample PDFs.  
+   • Contract test: upload → poll status → assert S3 result.
+
+⬢  Architectural constraints & best practices  
+* Use **async** FastAPI routes; no blocking I/O in the web tier.  
+* Keep parser back-ends pluggable via simple strategy class; default order:  
+    – Docling (layout) → Marker (scientific) → Unstructured OCR (image-heavy).  
+* Borrow the text splitting logic from `text_splitter.py`; expose it as `pdf_parser/utils/splitter.py`, configurable via env vars (`CHUNK_SIZE`, `OVERLAP`).  
+* Task must automatically choose **gpu** queue if `torch.cuda.is_available()`.  
+* Celery broker = **RabbitMQ**; result backend = **Redis**.  
+* Serialize args with **msgpack**, compress large payloads (>1 MB) with gzip.  
+* Graceful back-pressure: return HTTP 429 if `tasks_in_queue > MAX_Q` (read from env).  
+* Config everything with **pydantic-settings** + `.env`.  
+* Follow **Twelve-Factor**: no hard-coded paths; all I/O over S3/MinIO.
+
+⬢  Coding standards  
+* Python 3.10, black + ruff, type hints everywhere.  
+* Separate `service` and `domain` layers; no DB for now.  
+* Use `rich` progress when running locally.  
+* Include OpenAPI docstrings and example requests/responses.
+
+⬢  Starter tasks for you (Cursor AI)  
+1. Generate repo skeleton with the structure above.  
+2. Implement `POST /upload` & `GET /status/{task_id}` endpoints.  
+3. Flesh out `pdf_parser/parsers/` module with wrapper classes for Docling, Marker, Unstructured (mock implementation + TODO notes where model weights are required).  
+4. Port and unit-test the chunking/splitting logic from `text_splitter.py`; expose CLI `python -m pdf_parser.split <file.pdf>`.  
+5. Provide Dockerfiles and K8s manifests with sensible defaults.  
+6. Write one happy-path integration test demonstrating end-to-end flow using moto-S3 and fakeredis.
+
+Produce the full code base in one response, ready to commit.
+
+
+
+
+After running the application, here's what you should do:
+
+1. **Test the API endpoints**:
+   - Access the Swagger documentation at http://localhost:8000/docs
+   - Test the health endpoint: http://localhost:8000/health
+   - This should show the status of your Redis, queue, and S3 connections
+
+2. **Run the Celery worker** in a separate terminal:
+   ```powershell
+   cd src
+   poetry run worker
+   ```
+   This will start processing any PDF parsing tasks you submit.
+**** Run Flower to manage the Celery workers
+	
+	python -m flower flower --port=5555
+
+
+3. **Test a complete flow**:
+   - Upload a PDF file to your S3/MinIO endpoint
+   - Use the /upload endpoint with the S3 URL
+   - Use the returned task_id to check status at /status/{task_id}
+   - Wait for processing to complete
+   - Verify the results in your S3 bucket
+
+4. **Monitor the application**:
+   - The Prometheus metrics server is running on http://localhost:8001
+   - You can use a tool like Grafana to visualize metrics
+   - Check logs for any errors or warnings
+
+If you want to run a full load test, you can create a script that uploads multiple PDFs in parallel to test throughput and scaling capabilities.

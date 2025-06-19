@@ -1,0 +1,19 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: pdf-parser-worker-scaler
+spec:
+  scaleTargetRef:
+    name: pdf-parser-worker
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  pollingInterval: 15
+  cooldownPeriod: 300
+  triggers:
+  - type: rabbitmq
+    metadata:
+      protocol: amqp
+      queueName: gpu
+      mode: QueueLength
+      value: "5"
+      hostFromEnv: CELERY_BROKER_URL 
